@@ -6,14 +6,14 @@ use PHPMailer\PHPMailer\Exception;
 require_once __DIR__ . '/vendor/autoload.php';
 
 // ─────────────────────────────────────────────
-//  SMTP CONFIGURATION — edit these values
+//  SMTP — reads from environment variables
 // ─────────────────────────────────────────────
-define('MAIL_HOST',       'smtp.gmail.com');
-define('MAIL_USERNAME',   'rheadelana671@gmail.com');
-define('MAIL_PASSWORD',   'pmno auji wjvv xzaa');
-define('MAIL_PORT',       587);
-define('MAIL_FROM_NAME',  'BorrowTrack');
-define('MAIL_FROM_EMAIL', 'rheadelana671@gmail.com');
+define('MAIL_HOST',       getenv('MAIL_HOST')       ?: 'smtp.gmail.com');
+define('MAIL_USERNAME',   getenv('MAIL_USERNAME')   ?: '');
+define('MAIL_PASSWORD',   getenv('MAIL_PASSWORD')   ?: '');
+define('MAIL_PORT',       getenv('MAIL_PORT')       ?: 587);
+define('MAIL_FROM_NAME',  getenv('MAIL_FROM_NAME')  ?: 'BorrowTrack');
+define('MAIL_FROM_EMAIL', getenv('MAIL_FROM_EMAIL') ?: getenv('MAIL_USERNAME') ?: '');
 // ─────────────────────────────────────────────
 
 /**
@@ -21,14 +21,14 @@ define('MAIL_FROM_EMAIL', 'rheadelana671@gmail.com');
  */
 function createMailer(): PHPMailer
 {
-    $mail = new PHPMailer(true); // true = throw exceptions
+    $mail = new PHPMailer(true);
 
     $mail->isSMTP();
     $mail->Host       = MAIL_HOST;
     $mail->SMTPAuth   = true;
     $mail->Username   = MAIL_USERNAME;
     $mail->Password   = MAIL_PASSWORD;
-    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS; // TLS
+    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
     $mail->Port       = MAIL_PORT;
 
     $mail->setFrom(MAIL_FROM_EMAIL, MAIL_FROM_NAME);
@@ -75,11 +75,6 @@ function sendLoginOtpEmail(string $toEmail, string $toName, string $otp): bool
 
 /**
  * Send a 6-digit OTP verification code to the user's email.
- *
- * @param string $toEmail  Recipient email
- * @param string $toName   Recipient name
- * @param string $otp      The 6-digit OTP code
- * @return bool
  */
 function sendOtpEmail(string $toEmail, string $toName, string $otp): bool
 {
@@ -115,11 +110,6 @@ function sendOtpEmail(string $toEmail, string $toName, string $otp): bool
 
 /**
  * Send a registration confirmation email to the new user.
- *
- * @param string $toEmail   Recipient email address
- * @param string $toName    Recipient full name
- * @param string $username  Their chosen username
- * @return bool
  */
 function sendRegistrationEmail(string $toEmail, string $toName, string $username): bool
 {
@@ -147,14 +137,11 @@ function sendRegistrationEmail(string $toEmail, string $toName, string $username
 
 /**
  * Send an account approval notification email.
- *
- * @param string $toEmail   Recipient email address
- * @param string $toName    Recipient full name
- * @param string $username  Their username
- * @return bool
  */
 function sendApprovalEmail(string $toEmail, string $toName, string $username): bool
 {
+    $appUrl = defined('APP_URL') ? APP_URL : (getenv('APP_URL') ?: 'http://localhost/borrowtrack');
+
     try {
         $mail = createMailer();
         $mail->addAddress($toEmail, $toName);
@@ -168,7 +155,7 @@ function sendApprovalEmail(string $toEmail, string $toName, string $username): b
             '#22c55e',
             '✅',
             'Log In Now',
-            'http://localhost/borrowtrack/login.php'
+            $appUrl . '/login.php'
         );
         $mail->AltBody = "Hi $toName, your BorrowTrack account ($username) has been approved. You can now log in.";
         $mail->send();
@@ -181,22 +168,22 @@ function sendApprovalEmail(string $toEmail, string $toName, string $username): b
 
 /**
  * Send a borrow request status update email.
- *
- * @param string $toEmail   Recipient email
- * @param string $toName    Recipient name
- * @param string $toolName  Name of the tool/item
- * @param string $status    New status (approved / rejected / returned)
- * @return bool
  */
 function sendBorrowStatusEmail(string $toEmail, string $toName, string $toolName, string $status): bool
 {
+    $appUrl = defined('APP_URL') ? APP_URL : (getenv('APP_URL') ?: 'http://localhost/borrowtrack');
+
     $statusMap = [
-        'approved' => ['color' => '#22c55e', 'icon' => '✅', 'label' => 'Approved',  'msg' => 'Your borrow request has been <strong>approved</strong>. Please pick up the item on your scheduled date.'],
-        'rejected' => ['color' => '#ef4444', 'icon' => '❌', 'label' => 'Rejected',  'msg' => 'Unfortunately, your borrow request has been <strong>rejected</strong>. Please contact the administrator for more details.'],
-        'returned' => ['color' => '#3b82f6', 'icon' => '📦', 'label' => 'Returned',  'msg' => 'The item has been marked as <strong>returned</strong>. Thank you for using BorrowTrack!'],
+        'approved' => ['color' => '#22c55e', 'icon' => '✅', 'label' => 'Approved', 'msg' => 'Your borrow request has been <strong>approved</strong>. Please pick up the item on your scheduled date.'],
+        'rejected' => ['color' => '#ef4444', 'icon' => '❌', 'label' => 'Rejected', 'msg' => 'Unfortunately, your borrow request has been <strong>rejected</strong>. Please contact the administrator for more details.'],
+        'returned' => ['color' => '#3b82f6', 'icon' => '📦', 'label' => 'Returned', 'msg' => 'The item has been marked as <strong>returned</strong>. Thank you for using BorrowTrack!'],
     ];
 
-    $info = $statusMap[strtolower($status)] ?? ['color' => '#64748b', 'icon' => 'ℹ️', 'label' => ucfirst($status), 'msg' => "Your request status has been updated to <strong>$status</strong>."];
+    $info = $statusMap[strtolower($status)] ?? [
+        'color' => '#64748b', 'icon' => 'ℹ️',
+        'label' => ucfirst($status),
+        'msg'   => "Your request status has been updated to <strong>$status</strong>."
+    ];
 
     try {
         $mail = createMailer();
@@ -205,12 +192,11 @@ function sendBorrowStatusEmail(string $toEmail, string $toName, string $toolName
         $mail->Body    = emailTemplate(
             "Request {$info['label']}",
             "Hi <strong>" . htmlspecialchars($toName) . "</strong>,",
-            $info['msg'] . "<br><br>
-             <strong>Item:</strong> " . htmlspecialchars($toolName),
+            $info['msg'] . "<br><br><strong>Item:</strong> " . htmlspecialchars($toolName),
             $info['color'],
             $info['icon'],
             'View My Requests',
-            'http://localhost/borrowtrack/my_requests.php'
+            $appUrl . '/my_requests.php'
         );
         $mail->AltBody = "Hi $toName, your borrow request for $toolName has been $status.";
         $mail->send();
@@ -254,8 +240,6 @@ function emailTemplate(
         <table width='100%' cellpadding='0' cellspacing='0' style='background:#f1f5f9;padding:40px 0;'>
             <tr><td align='center'>
                 <table width='560' cellpadding='0' cellspacing='0' style='background:white;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.08);'>
-                    
-                    <!-- Header -->
                     <tr>
                         <td style='background:#0f172a;padding:30px;text-align:center;'>
                             <div style='font-size:32px;margin-bottom:8px;'>{$icon}</div>
@@ -263,11 +247,7 @@ function emailTemplate(
                             <p style='color:#94a3b8;margin:4px 0 0;font-size:13px;'>{$title}</p>
                         </td>
                     </tr>
-
-                    <!-- Accent bar -->
                     <tr><td style='height:4px;background:{$accentColor};'></td></tr>
-
-                    <!-- Body -->
                     <tr>
                         <td style='padding:36px 40px;color:#1e293b;font-size:15px;line-height:1.7;'>
                             <p style='margin:0 0 16px;'>{$greeting}</p>
@@ -275,8 +255,6 @@ function emailTemplate(
                             {$button}
                         </td>
                     </tr>
-
-                    <!-- Footer -->
                     <tr>
                         <td style='background:#f8fafc;padding:20px 40px;text-align:center;border-top:1px solid #e2e8f0;'>
                             <p style='color:#94a3b8;font-size:12px;margin:0;'>
@@ -284,7 +262,6 @@ function emailTemplate(
                             </p>
                         </td>
                     </tr>
-
                 </table>
             </td></tr>
         </table>

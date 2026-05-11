@@ -1,0 +1,17 @@
+# Dependencies — Railway runs composer install automatically
+vendor/
+
+# Local environment overrides (if you ever add one)
+.env
+
+# Uploaded files — ephemeral on Railway, do not commit
+uploads/items/*
+uploads/profiles/*
+
+# Keep the folders themselves
+!uploads/items/.gitkeep
+!uploads/profiles/.gitkeep
+
+# Debug/test files
+debug_login.php
+test_password.php

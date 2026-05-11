@@ -1,6 +1,13 @@
 <?php
 require_once 'config.php';
 
+// ── Security: require secret key to access this utility ──────────────────────
+$secret = getenv('DB_ADMIN_SECRET');
+if (empty($secret) || ($_GET['secret'] ?? '') !== $secret) {
+    http_response_code(403);
+    die("403 Forbidden — This utility is restricted.");
+}
+
 // Handle actions
 $action = $_GET['action'] ?? 'status';
 
