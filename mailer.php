@@ -3,54 +3,58 @@
 // ─────────────────────────────────────────────
 //  EMAIL CONFIG — reads from environment variables
 // ─────────────────────────────────────────────
-define('RESEND_API_KEY',  getenv('RESEND_API_KEY')  ?: '');
+define('BREVO_API_KEY',   getenv('BREVO_API_KEY')   ?: '');
 define('MAIL_FROM_NAME',  getenv('MAIL_FROM_NAME')  ?: 'BorrowTrack');
-define('MAIL_FROM_EMAIL', getenv('MAIL_FROM_EMAIL') ?: 'onboarding@resend.dev');
+define('MAIL_FROM_EMAIL', getenv('MAIL_FROM_EMAIL') ?: '');
 // ─────────────────────────────────────────────
 
 /**
- * Send email via Resend HTTP API (no SMTP needed).
+ * Send email via Brevo (Sendinblue) HTTP API.
  */
 function sendEmail(string $toEmail, string $toName, string $subject, string $htmlBody, string $textBody = ''): bool
 {
-    $apiKey = RESEND_API_KEY;
+    $apiKey = BREVO_API_KEY;
     if (empty($apiKey)) {
-        error_log("Resend API key not set.");
+        error_log("Brevo API key not set.");
         return false;
     }
 
     $payload = json_encode([
-        'from'    => MAIL_FROM_NAME . ' <' . MAIL_FROM_EMAIL . '>',
-        'to'      => [$toEmail],
-        'subject' => $subject,
-        'html'    => $htmlBody,
-        'text'    => $textBody ?: strip_tags($htmlBody),
+        'sender'      => [
+            'name'  => MAIL_FROM_NAME,
+            'email' => MAIL_FROM_EMAIL,
+        ],
+        'to'          => [['email' => $toEmail, 'name' => $toName]],
+        'subject'     => $subject,
+        'htmlContent' => $htmlBody,
+        'textContent' => $textBody ?: strip_tags($htmlBody),
     ]);
 
-    $ch = curl_init('https://api.resend.com/emails');
+    $ch = curl_init('https://api.brevo.com/v3/smtp/email');
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_POST           => true,
         CURLOPT_POSTFIELDS     => $payload,
         CURLOPT_HTTPHEADER     => [
-            'Authorization: Bearer ' . $apiKey,
+            'api-key: ' . $apiKey,
             'Content-Type: application/json',
+            'Accept: application/json',
         ],
-        CURLOPT_TIMEOUT        => 10,
+        CURLOPT_TIMEOUT => 10,
     ]);
 
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $response  = curl_exec($ch);
+    $httpCode  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $curlError = curl_error($ch);
     curl_close($ch);
 
     if ($curlError) {
-        error_log("Resend curl error: $curlError");
+        error_log("Brevo curl error: $curlError");
         return false;
     }
 
-    if ($httpCode !== 200 && $httpCode !== 201) {
-        error_log("Resend API error ($httpCode): $response");
+    if ($httpCode < 200 || $httpCode >= 300) {
+        error_log("Brevo API error ($httpCode): $response");
         return false;
     }
 
@@ -62,25 +66,25 @@ function sendEmail(string $toEmail, string $toName, string $subject, string $htm
  */
 function sendLoginOtpEmail(string $toEmail, string $toName, string $otp): bool
 {
-    $subject = 'BorrowTrack — Login Verification Code';
-    $html    = emailTemplate(
-        'Login Verification',
-        "Hi <strong>" . htmlspecialchars($toName) . "</strong>,",
-        "A sign-in attempt was made to your BorrowTrack account.<br>
-         Use the code below to complete your login. It expires in <strong>10 minutes</strong>.<br><br>
-         <div style='text-align:center;margin:24px 0;'>
-             <span style='font-size:36px;font-weight:900;letter-spacing:10px;
-                          color:#0f172a;background:#f1f5f9;padding:16px 28px;
-                          border-radius:12px;border:2px dashed #22c55e;
-                          display:inline-block;'>
-                 {$otp}
-             </span>
-         </div>
-         If you did not attempt to log in, please ignore this email.",
-        '#22c55e', '🔑'
+    return sendEmail(
+        $toEmail, $toName,
+        'BorrowTrack — Login Verification Code',
+        emailTemplate(
+            'Login Verification',
+            "Hi <strong>" . htmlspecialchars($toName) . "</strong>,",
+            "A sign-in attempt was made to your BorrowTrack account.<br>
+             Use the code below to complete your login. It expires in <strong>10 minutes</strong>.<br><br>
+             <div style='text-align:center;margin:24px 0;'>
+                 <span style='font-size:36px;font-weight:900;letter-spacing:10px;
+                              color:#0f172a;background:#f1f5f9;padding:16px 28px;
+                              border-radius:12px;border:2px dashed #22c55e;
+                              display:inline-block;'>{$otp}</span>
+             </div>
+             If you did not attempt to log in, please ignore this email.",
+            '#22c55e', '🔑'
+        ),
+        "Your BorrowTrack login code is: $otp (expires in 10 minutes)"
     );
-    return sendEmail($toEmail, $toName, $subject, $html,
-        "Your BorrowTrack login code is: $otp (expires in 10 minutes)");
 }
 
 /**
@@ -88,25 +92,25 @@ function sendLoginOtpEmail(string $toEmail, string $toName, string $otp): bool
  */
 function sendOtpEmail(string $toEmail, string $toName, string $otp): bool
 {
-    $subject = 'BorrowTrack — Email Verification Code';
-    $html    = emailTemplate(
-        'Email Verification',
-        "Hi <strong>" . htmlspecialchars($toName) . "</strong>,",
-        "Use the verification code below to confirm your email address.<br>
-         This code expires in <strong>10 minutes</strong>.<br><br>
-         <div style='text-align:center;margin:24px 0;'>
-             <span style='font-size:36px;font-weight:900;letter-spacing:10px;
-                          color:#0f172a;background:#f1f5f9;padding:16px 28px;
-                          border-radius:12px;border:2px dashed #38bdf8;
-                          display:inline-block;'>
-                 {$otp}
-             </span>
-         </div>
-         If you did not register on BorrowTrack, please ignore this email.",
-        '#38bdf8', '🔐'
+    return sendEmail(
+        $toEmail, $toName,
+        'BorrowTrack — Email Verification Code',
+        emailTemplate(
+            'Email Verification',
+            "Hi <strong>" . htmlspecialchars($toName) . "</strong>,",
+            "Use the verification code below to confirm your email address.<br>
+             This code expires in <strong>10 minutes</strong>.<br><br>
+             <div style='text-align:center;margin:24px 0;'>
+                 <span style='font-size:36px;font-weight:900;letter-spacing:10px;
+                              color:#0f172a;background:#f1f5f9;padding:16px 28px;
+                              border-radius:12px;border:2px dashed #38bdf8;
+                              display:inline-block;'>{$otp}</span>
+             </div>
+             If you did not register on BorrowTrack, please ignore this email.",
+            '#38bdf8', '🔐'
+        ),
+        "Your BorrowTrack verification code is: $otp (expires in 10 minutes)"
     );
-    return sendEmail($toEmail, $toName, $subject, $html,
-        "Your BorrowTrack verification code is: $otp (expires in 10 minutes)");
 }
 
 /**
@@ -114,17 +118,19 @@ function sendOtpEmail(string $toEmail, string $toName, string $otp): bool
  */
 function sendRegistrationEmail(string $toEmail, string $toName, string $username): bool
 {
-    $subject = 'BorrowTrack — Registration Received';
-    $html    = emailTemplate(
-        'Registration Received',
-        "Hi <strong>" . htmlspecialchars($toName) . "</strong>,",
-        "Your account (<strong>" . htmlspecialchars($username) . "</strong>) has been submitted
-         and is currently <span style='color:#f59e0b;font-weight:700;'>pending approval</span>.<br><br>
-         You will be able to log in once an administrator reviews and approves your account.",
-        '#f59e0b', '⏳'
+    return sendEmail(
+        $toEmail, $toName,
+        'BorrowTrack — Registration Received',
+        emailTemplate(
+            'Registration Received',
+            "Hi <strong>" . htmlspecialchars($toName) . "</strong>,",
+            "Your account (<strong>" . htmlspecialchars($username) . "</strong>) has been submitted
+             and is currently <span style='color:#f59e0b;font-weight:700;'>pending approval</span>.<br><br>
+             You will be able to log in once an administrator reviews and approves your account.",
+            '#f59e0b', '⏳'
+        ),
+        "Hi $toName, your BorrowTrack account ($username) is pending admin approval."
     );
-    return sendEmail($toEmail, $toName, $subject, $html,
-        "Hi $toName, your BorrowTrack account ($username) is pending admin approval.");
 }
 
 /**
@@ -132,18 +138,20 @@ function sendRegistrationEmail(string $toEmail, string $toName, string $username
  */
 function sendApprovalEmail(string $toEmail, string $toName, string $username): bool
 {
-    $appUrl  = defined('APP_URL') ? APP_URL : (getenv('APP_URL') ?: 'http://localhost/borrowtrack');
-    $subject = 'BorrowTrack — Account Approved';
-    $html    = emailTemplate(
-        'Account Approved',
-        "Hi <strong>" . htmlspecialchars($toName) . "</strong>,",
-        "Great news! Your BorrowTrack account (<strong>" . htmlspecialchars($username) . "</strong>)
-         has been <span style='color:#22c55e;font-weight:700;'>approved</span>.<br><br>
-         You can now log in and start borrowing equipment.",
-        '#22c55e', '✅', 'Log In Now', $appUrl . '/login.php'
+    $appUrl = defined('APP_URL') ? APP_URL : (getenv('APP_URL') ?: 'http://localhost/borrowtrack');
+    return sendEmail(
+        $toEmail, $toName,
+        'BorrowTrack — Account Approved',
+        emailTemplate(
+            'Account Approved',
+            "Hi <strong>" . htmlspecialchars($toName) . "</strong>,",
+            "Great news! Your BorrowTrack account (<strong>" . htmlspecialchars($username) . "</strong>)
+             has been <span style='color:#22c55e;font-weight:700;'>approved</span>.<br><br>
+             You can now log in and start borrowing equipment.",
+            '#22c55e', '✅', 'Log In Now', $appUrl . '/login.php'
+        ),
+        "Hi $toName, your BorrowTrack account ($username) has been approved."
     );
-    return sendEmail($toEmail, $toName, $subject, $html,
-        "Hi $toName, your BorrowTrack account ($username) has been approved.");
 }
 
 /**
@@ -166,15 +174,17 @@ function sendBorrowStatusEmail(string $toEmail, string $toName, string $toolName
         'msg'   => "Your request status has been updated to <strong>$status</strong>."
     ];
 
-    $subject = "BorrowTrack — Request {$info['label']}: " . htmlspecialchars($toolName);
-    $html    = emailTemplate(
-        "Request {$info['label']}",
-        "Hi <strong>" . htmlspecialchars($toName) . "</strong>,",
-        $info['msg'] . "<br><br><strong>Item:</strong> " . htmlspecialchars($toolName),
-        $info['color'], $info['icon'], 'View My Requests', $appUrl . '/my_requests.php'
+    return sendEmail(
+        $toEmail, $toName,
+        "BorrowTrack — Request {$info['label']}: " . htmlspecialchars($toolName),
+        emailTemplate(
+            "Request {$info['label']}",
+            "Hi <strong>" . htmlspecialchars($toName) . "</strong>,",
+            $info['msg'] . "<br><br><strong>Item:</strong> " . htmlspecialchars($toolName),
+            $info['color'], $info['icon'], 'View My Requests', $appUrl . '/my_requests.php'
+        ),
+        "Hi $toName, your borrow request for $toolName has been $status."
     );
-    return sendEmail($toEmail, $toName, $subject, $html,
-        "Hi $toName, your borrow request for $toolName has been $status.");
 }
 
 /**
