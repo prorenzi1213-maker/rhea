@@ -1,36 +1,37 @@
 <?php
 // TEMPORARY — DELETE AFTER TESTING
 
-$apiKey = getenv('RESEND_API_KEY');
-$from   = getenv('MAIL_FROM_EMAIL') ?: 'onboarding@resend.dev';
-$fromName = getenv('MAIL_FROM_NAME') ?: 'BorrowTrack';
+$apiKey   = getenv('BREVO_API_KEY');
+$fromName = getenv('MAIL_FROM_NAME')  ?: 'BorrowTrack';
+$fromEmail= getenv('MAIL_FROM_EMAIL') ?: '';
 
 echo "<pre>";
-echo "API Key: " . (empty($apiKey) ? '❌ NOT SET' : '✅ Set (' . substr($apiKey, 0, 8) . '...)') . "\n";
-echo "From: $fromName <$from>\n\n";
+echo "BREVO_API_KEY: " . (empty($apiKey) ? '❌ NOT SET' : '✅ ' . substr($apiKey, 0, 12) . '...') . "\n";
+echo "MAIL_FROM_EMAIL: " . ($fromEmail ?: '❌ NOT SET') . "\n\n";
 
 $payload = json_encode([
-    'from'    => "$fromName <$from>",
-    'to'      => ['rheadelana671@gmail.com'],
-    'subject' => 'BorrowTrack Test Email',
-    'html'    => '<p>This is a test email from BorrowTrack on Railway.</p>',
-    'text'    => 'This is a test email from BorrowTrack on Railway.',
+    'sender'      => ['name' => $fromName, 'email' => $fromEmail],
+    'to'          => [['email' => 'rheadelana671@gmail.com', 'name' => 'Test']],
+    'subject'     => 'BorrowTrack Brevo Test',
+    'htmlContent' => '<p>Test email from BorrowTrack via Brevo.</p>',
+    'textContent' => 'Test email from BorrowTrack via Brevo.',
 ]);
 
-$ch = curl_init('https://api.resend.com/emails');
+$ch = curl_init('https://api.brevo.com/v3/smtp/email');
 curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_POST           => true,
     CURLOPT_POSTFIELDS     => $payload,
     CURLOPT_HTTPHEADER     => [
-        'Authorization: Bearer ' . $apiKey,
+        'api-key: ' . $apiKey,
         'Content-Type: application/json',
+        'Accept: application/json',
     ],
     CURLOPT_TIMEOUT => 10,
 ]);
 
-$response = curl_exec($ch);
-$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+$response  = curl_exec($ch);
+$httpCode  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 $curlError = curl_error($ch);
 curl_close($ch);
 
