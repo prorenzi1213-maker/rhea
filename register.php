@@ -64,8 +64,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = "All fields are required.";
     } elseif (!verifyRecaptcha($_POST['g-recaptcha-response'] ?? '')) {
         $error = "Please complete the reCAPTCHA verification.";
-    } elseif (strlen($password) < 6 || strlen($password) > 8) {
-        $error = "Password must be 6-8 characters.";
+    } elseif (strlen($password) < 6) {
+        $error = "Password must be at least 6 characters.";
     } elseif (!preg_match('/[^a-zA-Z0-9]/', $password)) {
         $error = "Password must contain at least one special character.";
     } elseif ($password !== $confirm) {

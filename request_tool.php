@@ -58,10 +58,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_request'])) {
         $message_type = "danger";
     } else {
         try {
-            // CRITICAL: Ensure these column names (borrow_date, due_date) match your database exactly
+            // Fetch borrower name from users table
+            $user_stmt = $pdo->prepare("SELECT full_name, username FROM users WHERE id = ?");
+            $user_stmt->execute([$_SESSION['user_id']]);
+            $user_data = $user_stmt->fetch();
+            $borrower_name = $user_data['full_name'] ?: $user_data['username'];
+
             $stmt = $pdo->prepare("INSERT INTO borrow_records 
-                (user_id, tool_id, quantity, purpose, remarks, status, borrow_date, due_date) 
-                VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)");
+                (user_id, tool_id, quantity, purpose, remarks, status, borrow_date, due_date, borrower_name) 
+                VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)");
             
             $stmt->execute([
                 $_SESSION['user_id'], 
@@ -70,7 +75,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_request'])) {
                 $purpose, 
                 $remarks, 
                 $borrow_dt, 
-                $due_dt
+                $due_dt,
+                $borrower_name
             ]);
 
             $message = "<i class='fas fa-check-circle me-2'></i> <strong>Success!</strong> Request submitted. Redirecting...";
